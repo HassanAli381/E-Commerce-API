@@ -6,8 +6,8 @@ const userController = require('./../controllers/userController');
 
 router.route('/:id')
     .get(prodctController.getProduct)
-    .patch(verifyToken, accessibleFor('productOwner'), userController.uploadPhoto ,prodctController.updateProduct)
-    .delete(verifyToken, accessibleFor('productOwner'), prodctController.deleteProduct);
+    .patch(verifyToken, accessibleFor(), userController.uploadPhoto, prodctController.updateProduct)
+    .delete(verifyToken, accessibleFor(), prodctController.deleteProduct);
 
 router.route('/')
     .get(prodctController.getAllProducts)
@@ -19,5 +19,7 @@ router.route('/add-prod-to-wishlist/:id')
 router.route('/remove-prod-from-wishlist/:id')
     .delete(verifyToken, prodctController.removeProdFromWishList);
 
+router.route('/update-my-product/:id').patch(verifyToken, userController.uploadPhoto, prodctController.updateMyProduct);
+router.route('/delete-my-product/:id').delete(verifyToken, prodctController.deleteMyProduct);
 
 module.exports = router;

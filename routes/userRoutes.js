@@ -14,13 +14,13 @@ router.route('/')
 router.route('/:id')
     .get(userController.getUser)
     .patch(verifyToken, accessibleFor(), userController.uploadPhoto, userController.updateUser)
-    .delete(verifyToken, accessibleFor('loggedInUser'), userController.deleteUser);
+    .delete(verifyToken, accessibleFor(), userController.deleteUser);
 
 router.route('/update-me/:id')
-    .patch(verifyToken, accessibleFor('loggedInUser'), userController.uploadPhoto, userController.updateMe);
+    .patch(verifyToken, accessibleFor(), userController.uploadPhoto, userController.updateMe);
 
 
-router.route('/delete-me/:id').delete(verifyToken, accessibleFor('loggedInUser'), userController.deleteMyAccount);
+router.route('/delete-me/:id').delete(verifyToken, userController.deleteMyAccount);
 router.route('/change-password/:id').patch(verifyToken, accessibleFor('loggedInUser'), authController.changePassword);
 router.route('/get-wishlist/:id').get(verifyToken, accessibleFor('loggedInUser'), userController.getWishList);
 router.route('/get-reviews/:id').get(verifyToken, userController.getReviews);

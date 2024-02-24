@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const validator = require('validator');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
+const slugify = require('slugify');
 
 const userSchema = new mongoose.Schema({
     name: {
@@ -57,6 +58,7 @@ const userSchema = new mongoose.Schema({
     },
     passwordResetToken: String,
     passwordResetExpires: Date,
+    slug: String
 
 }, 
 {
@@ -68,6 +70,11 @@ userSchema.pre('save', function(next) {
         return next();
 
     this.passwordChangedAt = Date.now() - 1;
+    next();
+});
+
+userSchema.pre('save', function(next) {
+    this.slug = slugify(this.name, { lower: true });
     next();
 });
 

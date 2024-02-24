@@ -1,8 +1,14 @@
-const asyncWrapper = require('express-async-handler');
 const User = require('../models/userModel');
+
+const reviewsController = require('./reviewsController');
+const productController = require('./productController');
+
+const asyncWrapper = require('express-async-handler');
 const AppError = require('../utils/AppError');
 const validateObjectID = require('./../utils/validateObjectID');
 const { SUCCESS, FAIL } = require('../utils/responseText');
+
+const {filterObject} = require('./../utils/filterObject');
 
 const multer = require('multer');
 
@@ -63,12 +69,16 @@ exports.getUser = asyncWrapper(async(req, res, next) => {
     }
 
     user = await User.findOne({ _id: id }).populate({
-        path: 'wishList',
+        path: 'wishList productsOwned',
         select: '_id name price main_photo',
         populate: {
             path: 'category',
             select: 'name'
-        }
+        },
+    })
+    .populate({
+        path: 'reviews',
+        select: '-__v'
     })
     .select('-password -__v');
 
@@ -83,79 +93,8 @@ exports.getUser = asyncWrapper(async(req, res, next) => {
 
 // Accessible for admin
 exports.updateUser = asyncWrapper(async (req, res, next) => {
-    const id = req.params.id;
-    const isValidObjectID = validateObjectID(id);
-    if(!isValidObjectID) {
-        const error = AppError.createError('Invalid Object ID', 400, FAIL);
-        return next(error);
-    }
-    
-    const user = await User.findOne({_id : id});
-    if(!user) {
-        const error = AppError.createError('No Such User', 404, FAIL);
-        return next(error);
-    }
-
-    try {
-        const newUpdatedUser = await User.findByIdAndUpdate(
-            {_id : id},
-            {$set: {...req.body}}, 
-            {
-                new: true,
-                runValidators: true
-            }
-        );
-
-        if(req.file) {
-            newUpdatedUser.photo = req.file.filename;
-            await newUpdatedUser.save();
-        }
-        
-        res.status(200).json({
-            status: SUCCESS,
-            requestedAt : req.requestedAt, 
-            msg: 'User Updated Successfully',
-            data: {
-                newUpdatedUser
-            }
-        });
-    }
-    catch(err) {
-        return next(new Error());
-    }
-
+    updateMe(req, res, next);
 });
-
-exports.deleteUser = asyncWrapper(async (req, res, next) => {
-    const id = req.params.id;
-    const isValidObjectID = validateObjectID(id);
-    if(!isValidObjectID) {
-        const error = AppError.createError('Invalid Object ID', 400, FAIL);
-        return next(error);
-    }
-    
-    const user = await User.findOne({_id : id});
-    if(!user) {
-        const error = AppError.createError('No Such User', 404, FAIL);
-        return next(error);
-    }
-
-    await User.findOneAndDelete({_id : id});
-    res.status(204).json({
-        status: SUCCESS,
-        requestedAt : req.requestedAt, 
-        msg: 'User Deleted Successfully',
-    });
-});
-
-const filterObject = (obj, ...allowedFields) => {
-    const retObj = {};
-    Object.keys(obj).forEach(el => {
-        if(allowedFields.includes(el))
-            retObj[el] = obj[el];
-    });
-    return retObj;
-};
 
 exports.updateMe = asyncWrapper(async(req, res, next) => {
     const id = req.params.id;
@@ -170,7 +109,6 @@ exports.updateMe = asyncWrapper(async(req, res, next) => {
         const error = AppError.createError('No Such User', 404, FAIL);
         return next(error);
     }
-
     
     if(req.body.password) {
         const error = AppError.createError('You cannot change password via this route, Use Change Password route!', 400, FAIL);
@@ -179,6 +117,8 @@ exports.updateMe = asyncWrapper(async(req, res, next) => {
 
     try{  
         const filteredObject = filterObject(req.body, 'name', 'email', 'photo', 'age');
+        console.log(filteredObject);
+
         const newUpdatedUser = await User.findByIdAndUpdate(
             {_id : id},
             { $set: {...filteredObject}},
@@ -206,6 +146,11 @@ exports.updateMe = asyncWrapper(async(req, res, next) => {
     }
 });
 
+
+exports.deleteUser = asyncWrapper(async (req, res, next) => {
+    this.deleteMyAccount(req, res, next);
+});
+
 exports.deleteMyAccount = asyncWrapper(async(req, res, next) => {
     const id = req.params.id;
     const isValidObjectID = validateObjectID(id);
@@ -220,7 +165,33 @@ exports.deleteMyAccount = asyncWrapper(async(req, res, next) => {
         return next(error);
     }
 
-    await User.findByIdAndDelete(id);
+    // console.log(req.user);
+
+    if(req.user._id.toString() !== req.params.id)  {
+        const error = AppError.createError('You are not allowed to access this route', 403, FAIL);
+        return next(error);
+    }
+
+    req.noResponse = true;
+
+    // 1) delete all reviews of the user
+    for(let review of req.user.reviews) {
+        req.params.id = review;
+        await reviewsController.deleteMyReview(req, res, next);
+    }
+    
+    // 2) delete all products the user own
+    for(let product of req.user.productsOwned) {
+        req.params.id = product;
+        // console.log(product);
+        // console.log(req.params);
+        await productController.deleteMyProduct(req, res, next);
+    }
+
+    // console.log(id);
+    // 3) delete the user  
+    await User.findOneAndDelete({_id: id});
+
     res.status(204).json({
         status: SUCCESS,
         msg: 'Account deleted successfully!'

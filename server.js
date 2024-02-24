@@ -5,7 +5,7 @@ const dotenv = require('dotenv');
 dotenv.config({});
 
 const AppError = require('./utils/AppError');
-const { ERROR } = require('./utils/responseText');
+const { ERROR, FAIL } = require('./utils/responseText');
 
 const userRoutes = require('./routes/userRoutes');
 const categoriesRoutes = require('./routes/categoriesRoutes');
@@ -41,7 +41,7 @@ app.use('/api/products', productsRoute);
 app.use('/api/reviews', reviewsRoute);
 
 app.all('*', (req, res, next) => {
-    const error = AppError.createError(`Route ${req.originalUrl} is not found in the server`, 404, 'fail');
+    const error = AppError.createError(`Route ${req.originalUrl} is not found in the server`, 404, FAIL);
     return next(error); 
 });
 

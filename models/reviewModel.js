@@ -4,6 +4,12 @@ const reviewSchema = new mongoose.Schema({
     owner: {
         type: mongoose.Types.ObjectId,
         ref: 'User',
+        required: [true, 'review should belong to a user']
+    },
+    product: {
+        type: mongoose.Types.ObjectId,
+        ref: 'Product',
+        required: [true, 'review should belong to a product']
     },
     rating: {
         type: Number,
@@ -13,7 +19,11 @@ const reviewSchema = new mongoose.Schema({
         default: 0
     },
     comment: String
-});
+},
+{
+    timestamps: true
+}
+);
 
 
 const Review = mongoose.model('Review', reviewSchema);

@@ -1,12 +1,15 @@
 const Product = require('./../models/productModel');
-const { SUCCESS, FAIL, ERROR } = require('../utils/responseText');
-const asyncWrapper = require('express-async-handler');
-const validateObjectID = require('./../utils/validateObjectID');
-const AppError = require('./../utils/AppError');
-const categoriesController = require('./categoriesController');
 const User = require('../models/userModel');
 const Review = require('../models/reviewModel');
 const Category = require('./../models/categoryModel');
+
+const categoriesController = require('./categoriesController');
+
+const { SUCCESS, FAIL} = require('../utils/responseText');
+const AppError = require('./../utils/AppError');
+const asyncWrapper = require('express-async-handler');
+const validateObjectID = require('./../utils/validateObjectID');
+const { filterObject } = require('../utils/filterObject');
 
 const getAllProducts = asyncWrapper (async (req, res) => {
     const products = await Product.find().populate({
@@ -82,7 +85,11 @@ const addProduct = asyncWrapper (async(req, res, next) => {
     curUser.productsOwned.push(product);
     await curUser.save();
 
-    product.populate('category');
+    await product.populate({
+        path: 'category',
+        select: 'name'
+    });
+
     res.status(201).json({
         status: SUCCESS, 
         requestedAt: req.requestedAt,
@@ -93,7 +100,13 @@ const addProduct = asyncWrapper (async(req, res, next) => {
     });
 });
 
-const updateProduct = asyncWrapper(async(req, res, next) => {
+// @Accessibility: Only accessible for admins
+const updateProduct = (req, res, next) => {
+    updateMyProduct(req, res, next);
+};
+
+// @Accessibility: for product owner or admins
+const updateMyProduct = asyncWrapper(async(req, res, next) => {
     const { id } = req.params;
     const isValidObjectID = validateObjectID(id);
     if(!isValidObjectID) {
@@ -107,10 +120,25 @@ const updateProduct = asyncWrapper(async(req, res, next) => {
         return next(error);
     }
 
+    if(req.user.role !== 'ADMIN') {
+        const hasProduct = req.user.productsOwned.some(product => product._id == id);
+        if(!hasProduct) {
+            const error = AppError.createError('You are not allowed to access this route', 403, FAIL);
+            return next(error);
+        } 
+    }
+
+    
+    // limiting fields that can be updated!
+    const allowedFields = filterObject(req.body, 'name', 'price', 'photo', 'category');
+
     const updatedProduct = await Product.findByIdAndUpdate(
-        {_id: id},
-        {$set: {...req.body}},
-        {new: true}
+        { _id: id },
+        { $set: {...allowedFields} },
+        {
+            new: true,
+            runValidators: true
+        }
     )
     .populate({
         path: 'category',
@@ -120,8 +148,8 @@ const updateProduct = asyncWrapper(async(req, res, next) => {
 
     if(req.file){
         updatedProduct.photo = req.file.filename;
-        await updatedProduct.save();
     }
+    await updatedProduct.save();
 
     res.status(200).json({
         status: SUCCESS, 
@@ -134,7 +162,13 @@ const updateProduct = asyncWrapper(async(req, res, next) => {
 
 });
 
-const deleteProduct = asyncWrapper(async(req, res, next) => {
+// @Accessibility: Only accessible for admins
+const deleteProduct = (req, res, next) => {
+    deleteMyProduct(req, res, next);
+}
+
+// @Accessibility: for product owner or admins
+const deleteMyProduct = asyncWrapper(async(req, res, next) => {
     const { id } = req.params;
     const isValidObjectID = validateObjectID(id);
     if(!isValidObjectID) {
@@ -146,6 +180,14 @@ const deleteProduct = asyncWrapper(async(req, res, next) => {
     if(!product) {
         const error = AppError.createError('No such Product', 404, FAIL);
         return next(error);
+    }
+
+    if(req.user.role !== 'ADMIN') {
+        const hasProduct = req.user.productsOwned.some(product => product._id == id);
+        if(!hasProduct) {
+            const error = AppError.createError('You are not allowed to access this route', 403, FAIL);
+            return next(error);
+        } 
     }
 
     // delete product from it's category
@@ -191,14 +233,16 @@ const deleteProduct = asyncWrapper(async(req, res, next) => {
     }
 
     await Product.findByIdAndDelete(id);
-    res.status(204).json({
-        status: SUCCESS,
-        requestedAt: req.requestedAt,
-        msg: 'Product deleted successfully!',
-        data: {
-            product
-        }
-    });
+    if(!req.noResponse) {
+        res.status(204).json({
+            status: SUCCESS,
+            requestedAt: req.requestedAt,
+            msg: 'Product deleted successfully!',
+            data: {
+                product
+            }
+        });
+    }
 });
 
 // Custom 
@@ -322,7 +366,9 @@ module.exports = {
     getProduct,
     addProduct,
     updateProduct,
+    updateMyProduct,
     deleteProduct,
+    deleteMyProduct,
     getProductByID,
     addProductToWishList,
     removeProdFromWishList

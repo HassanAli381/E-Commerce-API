@@ -1,13 +1,17 @@
 const Review = require('./../models/reviewModel');
-const { SUCCESS, FAIL } = require('../utils/responseText');
-const validateObjectID = require('./../utils/validateObjectID');
-const AppError = require('./../utils/AppError');
-const asyncWrapper = require('express-async-handler');
-const productController = require('./productController');
 const User = require('../models/userModel');
+const Product = require('../models/productModel');
+
+const productController = require('./productController');
+
+const { SUCCESS, FAIL } = require('../utils/responseText');
+const AppError = require('./../utils/AppError');
+const validateObjectID = require('./../utils/validateObjectID');
+const asyncWrapper = require('express-async-handler');
+const { filterObject } = require('../utils/filterObject');
 
 // @description Get Reviews of a certain product (Product_id)
-const getReviews = (async(req, res, next) => {
+const getReviews = asyncWrapper(async(req, res, next) => {
     const { id } = req.params;
     const isValidObjectID = validateObjectID(id);
     if(!isValidObjectID) {
@@ -53,17 +57,28 @@ const addReview = asyncWrapper(async(req, res, next) => {
     
     // add review to user
     const owner = req.user;
-    review.owner = owner;
+    
     if(!owner.reviews)
         owner.reviews = [];
+
     owner.reviews.push(review);
     await owner.save();
-
+    
     // add review to the product 
     if(!product.reviews)
         product.reviews = [];
     product.reviews.push(review);
     await product.save();
+    
+    review.owner = owner;
+    review.product = product;
+
+    await review.populate({
+        path: 'owner product',
+        select: '_id name email photo role token',
+        select: '_id name price photo price category'
+    });
+
     await review.save();
 
     res.status(201).json({
@@ -77,7 +92,13 @@ const addReview = asyncWrapper(async(req, res, next) => {
 
 });
 
-const updateReview = asyncWrapper(async(req, res, next) => {
+// @Accessibility: only for admins 
+const updateReview = (req, res, next) => {
+    updateMyReview(req, res, next);
+}
+
+// @Accessibility: for product owner or admins
+const updateMyReview = asyncWrapper(async(req, res, next) => {
     const { id } = req.params;
     const isValidObjectID = validateObjectID(id);
     if(!isValidObjectID) {
@@ -91,9 +112,19 @@ const updateReview = asyncWrapper(async(req, res, next) => {
         return next(error);
     }
 
+    if(req.user.role !== 'ADMIN') {
+        const hasReview = req.user.reviews.some(review => review._id == id);
+        if(!hasReview) {
+            const error = AppError.createError('You are not allowed to access this route', 403, FAIL);
+            return next(error);
+        } 
+    }
+
+    const allowedFields = filterObject(req.body, 'rating', 'comment');
+
     const newReview = await Review.findByIdAndUpdate(
         {_id: id},
-        {$set: {...req.body} },
+        {$set: {...allowedFields} },
         {new: true}
     );
     
@@ -107,7 +138,12 @@ const updateReview = asyncWrapper(async(req, res, next) => {
     });
 });
 
-const deleteReview =  asyncWrapper(async(req, res, next) => {
+
+const deleteReview = (req, res, next) => {
+    deleteMyReview(req, res, next);
+}
+
+const deleteMyReview = asyncWrapper(async(req, res, next) => {
     const { id } = req.params;
     const isValidObjectID = validateObjectID(id);
     if(!isValidObjectID) {
@@ -121,20 +157,38 @@ const deleteReview =  asyncWrapper(async(req, res, next) => {
         return next(error);
     }
 
+    if(req.user.role !== 'ADMIN') {
+        const hasReview = req.user.reviews.some(review => review._id == id);
+        if(!hasReview) {
+            const error = AppError.createError('You are not allowed to access this route', 403, FAIL);
+            return next(error);
+        } 
+    }
+
+    // delete review from his owner reviews
     const ownedBy = review.owner;
     await User.findOneAndUpdate(
         { _id : ownedBy },
         { $pull: { reviews: id } }
     );
 
-    await Review.findByIdAndDelete({_id: id});
+    // delete review from it's product reviews
+    const productOfReview = review.product;
+    await Product.findOneAndUpdate(
+        { _id: productOfReview },
+        { $pull: { reviews: id } }
+    );
 
-    res.status(204).json({
-        status: SUCCESS,
-        requestedAt: req.requestedAt,
-        msg: 'Product Deleted Successfully!',
-        data: null
-    });
+    await Review.findByIdAndDelete({_id: id});
+    
+    if(!req.noResponse) {
+        res.status(204).json({
+            status: SUCCESS,
+            requestedAt: req.requestedAt,
+            msg: 'Review Deleted Successfully!',
+            data: null
+        });
+    }
 
 });
 
@@ -156,6 +210,8 @@ module.exports = {
     getReviews,
     addReview,
     updateReview,
+    updateMyReview,
     deleteReview,
+    deleteMyReview,
     getReviewByID
 }
