@@ -1,12 +1,16 @@
 const User = require('./../models/userModel');
+
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { generateJWT } = require('./../utils/generateJWT');
+
 const AppError = require('../utils/AppError');
 const asyncWrapper = require('express-async-handler');
-const { SUCCESS, FAIL, ERROR } = require('./../utils/responseText');
-const sendEmail = require('./../utils/email');
-const crypto = require('crypto');
 const validateObjectID = require('./../utils/validateObjectID');
+
+const { SUCCESS, FAIL, ERROR } = require('./../utils/responseText');
+
+const sendEmail = require('./../utils/email');
 
 
 exports.register = asyncWrapper (async (req, res, next) => {
@@ -28,6 +32,8 @@ exports.register = asyncWrapper (async (req, res, next) => {
     });
     await newUser.save();
     
+    newUser.password = undefined;
+
     res.status(201).json({
         status: SUCCESS,
         requestedAt: req.requestedAt,
@@ -57,6 +63,16 @@ exports.login = asyncWrapper(async (req, res, next) => {
     user.token = token;
     await user.save();
 
+    const cookieOptions = {
+        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        httpOnly: true
+    };
+    
+    if(process.env.NODE_ENV === 'production')
+        cookieOptions.secure = true;
+
+    res.cookie('jwt', token, cookieOptions);
+
     res.status(200).json({
         status: SUCCESS,
         requestedAt: req.requestedAt,
@@ -64,6 +80,33 @@ exports.login = asyncWrapper(async (req, res, next) => {
         data: {
             token
         }
+    });
+});
+
+exports.logout = asyncWrapper(async (req, res, next) => {
+    const user = req.user;
+    if(!user || !user.token) {
+        const error = AppError.createError('You cannot logout', 403, FAIL);
+        return next(error);
+    }
+
+    // clear the token from the cookie
+    const cookieOptions = {
+        expires: new Date(Date.now() - 1000),
+        httpOnly: true
+    }
+    if(process.env.NODE_ENV === 'production')
+        cookieOptions.secure = true;
+
+    res.clearCookie('jwt', undefined, cookieOptions);
+    user.token = undefined;
+
+    req.user = undefined;
+    await user.save();
+
+    res.status(200).json({
+        status: SUCCESS,
+        msg: 'Logged out successfully!'
     });
 });
 
@@ -140,7 +183,6 @@ exports.forgotPassword = asyncWrapper(async (req, res, next) => {
     }
 
 });
-
 
 exports.resetPassword = asyncWrapper(async (req, res, next) => {
     // Get user based on the token

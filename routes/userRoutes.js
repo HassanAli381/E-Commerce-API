@@ -7,6 +7,7 @@ const accessibleFor = require('../middlewares/accessibleFor');
 
 router.route('/register').post(authController.register);
 router.route('/login').post(authController.login);
+router.route('/logout').post(verifyToken, authController.logout);
 
 router.route('/')
     .get(userController.getAllUsers);
@@ -21,8 +22,8 @@ router.route('/update-me/:id')
 
 
 router.route('/delete-me/:id').delete(verifyToken, userController.deleteMyAccount);
-router.route('/change-password/:id').patch(verifyToken, accessibleFor('loggedInUser'), authController.changePassword);
-router.route('/get-wishlist/:id').get(verifyToken, accessibleFor('loggedInUser'), userController.getWishList);
+router.route('/change-password/:id').patch(verifyToken, accessibleFor(), authController.changePassword);
+router.route('/get-wishlist/:id').get(verifyToken, accessibleFor(), userController.getWishList);
 router.route('/get-reviews/:id').get(verifyToken, userController.getReviews);
 router.route('/forgot-password').post(authController.forgotPassword);
 router.route('/reset-password/:token').patch(authController.resetPassword);
