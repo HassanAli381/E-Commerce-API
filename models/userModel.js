@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: [true, 'User name is required'],
         trim: true,
-        maxlength: [20, 'User Name musn\'t exceed 20 characters']
+        maxlength: [30, 'User Name musn\'t exceed 30 characters']
     },
     age: {
         type: Number,
@@ -20,7 +20,8 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Email is required'],
         unique: [true, 'E-mail must be unique'],
-        validate: [validator.isEmail, 'Invalid Email']
+        validate: [validator.isEmail, 'Invalid Email'],
+        lowercase: true
     },
     password: {
         type: String,
