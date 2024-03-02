@@ -73,11 +73,15 @@ const addReview = asyncWrapper(async(req, res, next) => {
     review.owner = owner;
     review.product = product;
 
-    await review.populate({
-        path: 'owner product',
+    await review
+    .populate([{
+        path: 'owner',
         select: '_id name email photo role token',
-        select: '_id name price photo price category'
-    });
+    },
+    {
+        path: 'product',
+        select: '_id name price photo category',
+    }]);
 
     await review.save();
 
