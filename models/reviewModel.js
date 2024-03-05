@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+const Product = require('./productModel');
+
 const reviewSchema = new mongoose.Schema({
     owner: {
         type: mongoose.Types.ObjectId,
@@ -25,6 +27,34 @@ const reviewSchema = new mongoose.Schema({
 }
 );
 
+// calculate avg rating of a specific product 
+reviewSchema.statics.calcAvgRating = async function(prodID) {
+    const status = await this.aggregate([
+        {
+            $match: {product: prodID}
+        },
+        {
+            // grouping comments that shares the same product
+            $group: {
+                _id: '$product',
+                ratingsNumbers: { $sum: 1 },
+                avgRating: { $avg: '$rating' }
+            }
+        }
+    ]);
+    console.log(status);
+
+    await Product.findByIdAndUpdate(prodID, {
+        ratingsQuantity: status[0].ratingsNumbers,
+        avgRating: status[0].avgRating
+    });
+
+}
+
+reviewSchema.post('save', function() {
+    // console.log('this.constructor', this.constructor);
+    this.constructor.calcAvgRating(this.product);
+});
 
 const Review = mongoose.model('Review', reviewSchema);
 module.exports = Review;

@@ -71,17 +71,12 @@ const addReview = asyncWrapper(async(req, res, next) => {
     await product.save();
     
     review.owner = owner;
-    review.product = product;
+    review.product = product._id;
 
-    await review
-    .populate([{
+    await review.populate({
         path: 'owner',
         select: '_id name email photo role token',
-    },
-    {
-        path: 'product',
-        select: '_id name price photo category',
-    }]);
+    });
 
     await review.save();
 
@@ -132,6 +127,8 @@ const updateMyReview = asyncWrapper(async(req, res, next) => {
         {new: true}
     );
     
+    await newReview.save();
+
     res.status(200).json({
         status: SUCCESS, 
         requestedAt: req.requestedAt,
@@ -183,6 +180,7 @@ const deleteMyReview = asyncWrapper(async(req, res, next) => {
         { $pull: { reviews: id } }
     );
 
+    await review.save();
     await Review.findByIdAndDelete({_id: id});
     
     if(!req.noResponse) {
