@@ -361,6 +361,37 @@ const removeProdFromWishList = asyncWrapper(async(req, res, next) => {
 
 });
 
+const searchForProduct = asyncWrapper(async(req, res, next) => {
+    const page = req.query.page || 1;
+    const limit = req.query.limit || 10;
+    const skip = (page - 1) * limit;
+    console.log(req.params);
+
+    const matchedResults = await Product.find(
+        {
+            "$or": [
+                {
+                    name: {
+                        $regex: req.params.searchKeyword,
+                        $options: "i" // Case-insensitive
+                    }
+                }
+            ]
+        }
+    )
+    .limit(limit)
+    .skip(skip);
+
+    res.status(200).json({
+        status: SUCCESS, 
+        requestedAt: req.requestedAt,
+        results: matchedResults.length,
+        data: { 
+            matchedResults
+        }
+    });
+});
+
 module.exports = {
     getAllProducts,
     getProduct,
@@ -371,5 +402,6 @@ module.exports = {
     deleteMyProduct,
     getProductByID,
     addProductToWishList,
-    removeProdFromWishList
+    removeProdFromWishList,
+    searchForProduct
 }

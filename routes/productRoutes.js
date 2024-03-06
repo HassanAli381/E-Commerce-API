@@ -22,4 +22,6 @@ router.route('/remove-prod-from-wishlist/:id')
 router.route('/update-my-product/:id').patch(verifyToken, userController.uploadPhoto, prodctController.updateMyProduct);
 router.route('/delete-my-product/:id').delete(verifyToken, prodctController.deleteMyProduct);
 
+router.route('/search/:searchKeyword').get(prodctController.searchForProduct);
+
 module.exports = router;
